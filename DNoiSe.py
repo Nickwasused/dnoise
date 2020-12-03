@@ -1,6 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
+from importlib import reload
 import os
 import sys
 import time
@@ -15,16 +16,15 @@ import requests
 import dns.resolver
 
 reload(sys)
-sys.setdefaultencoding("utf8")
 
 #########################################################################################
 #				BEGINNING OF CONFIG SECTION				#
 
 # Set working directory for the script - the database with top 1M domains will be stored here.
-working_directory = "/home/pi/"
+working_directory = "/home/pi/noise"
 
 # Set your pi-hole auth token - you can copy it from /etc/pihole/setupVars.conf
-auth = "90b03f6fc88f60ff24f4658bbb34c7332f6487b4bd279d0a69001b7f65dc935a"
+auth = ""
 
 # Set IP of the machine running this script. The script is optimized for running directly on the pi-hole server,
 # or on another un-attended machine. "127.0.0.1" is valid only when running directly on the pi-hole.
@@ -78,7 +78,7 @@ def download_domains():
 # A simple loop that makes sure we have an Internet connection - it can take a while for pi-hole to get up and running after a reboot.
 while True:
 	try:
-		urllib.urlopen("http://example.com")
+		urllib.urlopen("https://github.com")
 		print >> log_file, time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.mktime(datetime.datetime.now().timetuple())))+" Got network connection."
 		break
 	except:
@@ -89,10 +89,6 @@ while True:
 exists = os.path.isfile(working_directory + "domains.sqlite")
 if exists == False:
 	download_domains()
-
-if auth == "90b03f6fc88f60ff24f4658bbb34c7332f6487b4bd279d0a69001b7f65dc935a":
-	print >> log_file, time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.mktime(datetime.datetime.now().timetuple())))+" You forgot to put in the real auth token. Check the config section at the beginning of the script. Quitting."
-	exit()
 
 db = sqlite3.connect(working_directory+"domains.sqlite")
 
