@@ -146,7 +146,7 @@ while True:
 
         # Try to resolve the domain - that's why we're here in the first place, isn't it…
         try:
-            dns.resolver.query(domain, random.choice(query_types))
+            dns.resolver.resolve(domain, random.choice(query_types))
         except:
             pass
 
