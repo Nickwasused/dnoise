@@ -21,7 +21,7 @@ reload(sys)
 #				BEGINNING OF CONFIG SECTION				#
 
 # Set working directory for the script - the database with top 1M domains will be stored here.
-working_directory = "/home/pi/noise"
+working_directory = "/home/pi/noise/"
 
 # Set your pi-hole auth token - you can copy it from /etc/pihole/setupVars.conf
 auth = ""
@@ -34,7 +34,8 @@ client = "127.0.0.1"
 dns.resolver.nameservers = "127.0.0.1"
 
 # Logging to a file. For easier debugging uncomment the second row.
-log_file = codecs.open(working_directory+"dnoise.log", mode="w", encoding="utf-8")
+logfiletemp = working_directory + "dnoise.log"
+log_file = codecs.open(logfiletemp, mode="w", encoding="utf-8")
 #log_file = sys.stdout
 
 # Logs every fake DNS query to a log file when set to True. DO NOT USE in production environment.
