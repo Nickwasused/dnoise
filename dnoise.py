@@ -20,11 +20,11 @@ reload(sys)
 #########################################################################################
 #				BEGINNING OF CONFIG SECTION				#
 
-# Set working directory for the script - the database with top 1M domains will be stored here.
-working_directory = os.path.dirname(os.path.realpath(__file__))
-
 # Set your pi-hole auth token - you can copy it from /etc/pihole/setupVars.conf
 auth = ""
+
+# Set the Fake Query Multiplier | Default: 1 = 10% Fake Querys
+multiplier = 1.5
 
 # Set IP of the machine running this script. The script is optimized for running directly on the pi-hole server,
 # or on another un-attended machine. "127.0.0.1" is valid only when running directly on the pi-hole.
@@ -36,6 +36,8 @@ dns.resolver.nameservers = "127.0.0.1"
 # Logging to a file. For easier debugging uncomment the second row.
 log_file = sys.stdout
 
+# Set working directory for the script - the database with top 1M domains will be stored here.
+working_directory = os.path.dirname(os.path.realpath(__file__))
 
 #				  END OF CONFIG SECTION  				#
 #########################################################################################
@@ -159,6 +161,7 @@ while True:
             break
 
         # Since we want to add only about 10% of extra DNS queries, we multiply the wait time by 10, then add a small random delay.
-        time.sleep((300.0 / (len(genuine_queries)) * 10) + random.uniform(0, 2))
-
+        sleeper = (300.0 / (len(genuine_queries)) * 10 / multiplier) + random.uniform(0, 2)
+        time.sleep(sleeper)
+       
 db.close()
