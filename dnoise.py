@@ -40,6 +40,10 @@ log_file = sys.stdout
 #				  END OF CONFIG SECTION  				#
 #########################################################################################
 
+if auth == "":
+    print("Please Set your auth token")
+    exit()
+
 def download_domains():
     # Download the Cisco Umbrella list. More info: https://s3-us-west-1.amazonaws.com/umbrella-static/index.html
     try:
