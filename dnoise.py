@@ -21,7 +21,7 @@ reload(sys)
 #				BEGINNING OF CONFIG SECTION				#
 
 # Set working directory for the script - the database with top 1M domains will be stored here.
-working_directory = "/home/pi/noise/"
+working_directory = os.path.dirname(os.path.realpath(__file__))
 
 # Set your pi-hole auth token - you can copy it from /etc/pihole/setupVars.conf
 auth = ""
