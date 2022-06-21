@@ -6,4 +6,5 @@
 .idea/inspectionProfiles/Project_Default.xml
 .idea/inspectionProfiles/profiles_settings.xml
 .idea/DNoiSe.iml
+config.json
 domains.sqlite
