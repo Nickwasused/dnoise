@@ -17,6 +17,9 @@ import dns.resolver
 import requests
 import pandas
 
+logging.basicConfig(level=logging.INFO)
+logging.getLogger().setLevel(logging.INFO)
+
 reload(sys)
 
 
@@ -158,25 +161,33 @@ while True:
     if len(query_types) == 0:
         query_types.append("A")
 
-    while True:
-        # Pick a random domain from the top 1M list
-        cursor = db.cursor()
-        cursor.execute(f"SELECT Domain FROM Domains WHERE ID={str(random.randint(1, 1000000))}")
-        domain = cursor.fetchone()[0]
+    try:
+        while True:
+            # Pick a random domain from the top 1M list
+            cursor = db.cursor()
+            cursor.execute(f"SELECT Domain FROM Domains WHERE ID={str(random.randint(1, 1000000))}")
+            domain = cursor.fetchone()[0]
 
-        # Try to resolve the domain - that's why we're here in the first place, isn't it…
+            # Try to resolve the domain - that's why we're here in the first place, isn't it…
+            try:
+                logging.info(f"resolving domain: {domain}")
+                dns.resolver.resolve(domain, random.choice(query_types))
+            except Exception as e:
+                logging.warning(e)
+                pass
+
+            # We want to re-sample our "queries per last 5 min" rate every minute.
+            if int(time.mktime(datetime.datetime.now().timetuple())) - time_until > 60:
+                break
+
+            # Since we want to add only about 10% of extra DNS queries, we multiply the wait time by 10, then add a
+            # small random delay.
+            time.sleep((300.0 / (len(genuine_queries)) * 10 / multiplier) + random.uniform(0, 2))
+    except KeyboardInterrupt:
         try:
-            dns.resolver.resolve(domain, random.choice(query_types))
-        except Exception as e:
-            logging.warning(e)
-            pass
-
-        # We want to re-sample our "queries per last 5 min" rate every minute.
-        if int(time.mktime(datetime.datetime.now().timetuple())) - time_until > 60:
+            break
+        except SystemExit:
             break
 
-        # Since we want to add only about 10% of extra DNS queries, we multiply the wait time by 10, then add a small
-        # random delay.
-        time.sleep((300.0 / (len(genuine_queries)) * 10 / multiplier) + random.uniform(0, 2))
-
+logging.info("exiting")
 db.close()
