@@ -30,8 +30,28 @@ pip3 install -r requirements.txt
 1. Run this on the same machine that hosts your pi-hole instance.
 2. Rename the `config.example.json` to `config.json`
 3. Fill in the auth field of the config by getting the `WEBPASSWORD` from the Pi-hole config by typing `sudo cat /etc/pihole/setupVars.conf` on the Pi-hole server.
-4. Put this in your `crontab -e` to make it run after reboot:  
-`@reboot /home/pi/dnoise/bin/python3 /home/pi/dnoise/dnoise.py`
-5. That's all there is to it. The script will sample network activity every minute and add 10% extra DNS queries made randomly to Cisco's top 1M domain list.
+4. That's all there is to it. The script will sample network activity every minute and add 10% extra DNS queries made randomly to Cisco's top 1M domain list.
 
+## Automatic start
 
+You obviously need to change the path `home/pi/dnoise` to your path.
+
+- Put this in your `crontab -e` to make it run after reboot: `@reboot /home/pi/dnoise/bin/python3 /home/pi/dnoise/dnoise.py`
+- Systemd service:  
+```
+[Unit]
+Description=dnoise service
+After=network.target
+StartLimitIntervalSec=0
+
+[Service]
+SyslogIdentifier=noise
+Type=simple
+User=pi
+ExecStart=/home/pi/dnoise/bin/python3 /home/pi/dnoise/dnoise.py
+WorkingDirectory=/home/pi/dnoise
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target
+```
