@@ -51,6 +51,12 @@ User=pi
 ExecStart=/home/pi/dnoise/bin/python3 /home/pi/dnoise/dnoise.py
 WorkingDirectory=/home/pi/dnoise
 Environment=PYTHONUNBUFFERED=1
+PrivateTmp=true
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=false
+ReadOnlyDirectories=/
+ReadWriteDirectories=/home/pi/dnoise/
 
 [Install]
 WantedBy=multi-user.target
