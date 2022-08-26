@@ -2,5 +2,8 @@
   "auth": "",
   "multiplier": 1,
   "client": "127.0.0.1",
-  "pihole_ip": "127.0.0.1"
+  "pihole_ip": "127.0.0.1",
+  "network_check_url": "https://duckduckgo.com",
+  "maxium_network_tries": 10,
+  "network_retry_time": 10
 }

@@ -47,23 +47,25 @@ client = config["client"]
 # Set IP of your pi-hole instance. "127.0.0.1" is valid only when running directly on the pi-hole.
 dns.resolver.nameservers = config["pihole_ip"]
 
-# Logging to a file. For easier debugging uncomment the second row.
+# Logging to a file.
 log_file = sys.stdout
 
 # Set working directory for the script - the database with top 1M domains will be stored here.
 working_directory = os.path.dirname(os.path.realpath(__file__))
+zip_path = os.path.join(working_directory, "domains.zip")
+database_path = os.path.join(working_directory, "domains.sqlite")
 
 if auth == "":
     logging.warning("Please Set your auth token")
-    sys.exit()
+    sys.exit(1)
 
 
 def download_domains():
     # Download the Cisco Umbrella list. More info: https://s3-us-west-1.amazonaws.com/umbrella-static/index.html
     try:
         logging.info("Downloading the domain list…")
-        urllib.request.urlretrieve("http://s3-us-west-1.amazonaws.com/umbrella-static/top-1m.csv.zip",
-                                   filename=working_directory + "domains.zip")
+        urllib.request.urlretrieve("https://s3-us-west-1.amazonaws.com/umbrella-static/top-1m.csv.zip",
+                                   filename=zip_path)
     except Exception as e:
         logging.error(e)
         logging.error("Can't download the domain list. Quitting.")
@@ -71,17 +73,16 @@ def download_domains():
 
     # Create a SQLite database and import the domain list
     try:
-        domains_db = sqlite3.connect(working_directory + "domains.sqlite")
-        domains_db.execute("CREATE TABLE Domains (ID INT PRIMARY KEY, Domain TEXT)")
+        domains_db = sqlite3.connect(database_path)
+        domains_db.execute("CREATE TABLE domains (ID INT PRIMARY KEY, Domain TEXT)")
 
         # Load the CSV into our database
         logging.info("Importing to sqlite…")
-        df = pandas.read_csv(working_directory + "domains.zip", compression='zip', names=["ID", "Domain"])
-        df.to_sql("Domains", domains_db, if_exists="append", index=False)
+        df = pandas.read_csv(zip_path, compression='zip', names=["ID", "Domain"])
+        df.to_sql("domains", domains_db, if_exists="append", index=False)
 
         domains_db.close()
-
-        os.remove(working_directory + "domains.zip")
+        os.remove(zip_path)
     except Exception as e:
         logging.error(e)
         logging.error("Import failed. Quitting.")
@@ -93,22 +94,35 @@ def download_domains():
 
 # A simple loop that makes sure we have an Internet connection - it can take a while for pi-hole to get up and
 # running after a reboot.
+network_try = 0
+retry_seconds = config["network_retry_time"]
+check_url = config["network_check_url"]
+
+if "http" not in check_url:
+    logging.warning("There is no protocol specified in your network_check_url. Using https!")
+    check_url = f"https://{check_url}"
+    logging.info(f"New network_check_url: {check_url}")
+
 while True:
+    if network_try > config["maximum_network_tries"]:
+        logging.error(f"Network is not up after {network_try} connection checks to url {check_url}. exiting.")
+        sys.exit(1)
     try:
-        urllib.request.urlopen("https://duckduckgo.com")
+        urllib.request.urlopen(check_url)
         logging.info("Got network connection.")
         break
     except Exception as e:
         logging.error(e)
-        logging.info("Network not up yet, retrying in 10 seconds.")
-        time.sleep(10)
+        logging.info(f"Network not up yet, retrying in {retry_seconds} seconds.")
+        network_try += 1
+        time.sleep(retry_seconds)
 
 # Download the top 1M domain list if we don't have it yet.
-exists = os.path.isfile(f"{working_directory}domains.sqlite")
+exists = os.path.isfile(database_path)
 if not exists:
     download_domains()
 
-db = sqlite3.connect(f"{working_directory}domains.sqlite")
+db = sqlite3.connect(database_path)
 
 while True:
     # We want the fake queries to blend in with the organic traffic expected at each given time of the day,
@@ -118,14 +132,18 @@ while True:
     time_from = time_until - 300
 
     # This will give us a list of all DNS queries that pi-hole handled in the past 5 minutes.
+    pihole_tries = 0
     while True:
+        if pihole_tries > 15:
+            logging.error("Pihole seems to be down!")
+            sys.exit(1)
         try:
-            all_queries = requests.get(
-                f"http://pi.hole/admin/api.php?getAllQueries&from={str(time_from)}&until={str(time_until)}&auth={auth}")
+            all_queries = requests.get(f"http://{config['pihole_ip']}/admin/api.php?getAllQueries&from={str(time_from)}&until={str(time_until)}&auth={auth}")
             break
         except Exception as e:
+            pihole_tries += 1
             logging.error(e)
-            logging.warning(" API request failed. Retrying in 15 seconds.")
+            logging.warning("API request failed. Retrying in 15 seconds.")
             time.sleep(15)
 
     parsed_all_queries = json.loads(all_queries.text)
@@ -144,7 +162,7 @@ while True:
 
     # Protection in case the pi-hole logs are empty.
     if len(genuine_queries) == 0:
-        genuine_queries.append("Let's not devide by 0")
+        genuine_queries.append("Let's not divide by 0")
 
     # We want the types of our fake queries (A/AAA/PTR/…) to proportionally match those of the real traffic.
     query_types = []
@@ -165,8 +183,9 @@ while True:
         while True:
             # Pick a random domain from the top 1M list
             cursor = db.cursor()
-            cursor.execute(f"SELECT Domain FROM Domains WHERE ID={str(random.randint(1, 1000000))}")
+            cursor.execute("SELECT domain FROM Domains WHERE ID = ?;", (str(random.randint(1, 1000000)), ))
             domain = cursor.fetchone()[0]
+            cursor.close()
 
             # Try to resolve the domain - that's why we're here in the first place, isn't it…
             try:
