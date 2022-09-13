@@ -48,6 +48,8 @@ StartLimitIntervalSec=0
 SyslogIdentifier=noise
 Type=simple
 User=pi
+Restart=on-failure
+RestartSec=60
 ExecStart=/home/pi/dnoise/bin/python3 /home/pi/dnoise/dnoise.py
 WorkingDirectory=/home/pi/dnoise
 Environment=PYTHONUNBUFFERED=1
