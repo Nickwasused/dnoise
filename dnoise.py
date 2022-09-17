@@ -148,8 +148,8 @@ exists = os.path.isfile(database_path)
 if not exists:
     download_domains()
 
-# 7 days = 604800
-if (time.time() - os.path.getctime(database_path)) > 604800 and config["keep_database_updated"]:
+# 7 days = 604400
+if (time.time() - os.path.getctime(database_path)) > 604400 and config["keep_database_updated"]:
     logging.warning("the domain data is old. downloading new data")
     os.remove(database_path)
     download_domains()
