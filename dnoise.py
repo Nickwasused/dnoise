@@ -143,6 +143,12 @@ exists = os.path.isfile(database_path)
 if not exists:
     download_domains()
 
+# 7 days = 604800
+if (time.time() - os.path.getctime(database_path)) > 604800 and config["keep_database_updated"]:
+    logging.warning("the domain data is old. downloading new data")
+    os.remove(database_path)
+    download_domains()
+
 db = sqlite3.connect(database_path)
 
 
@@ -213,7 +219,13 @@ while True:
     try:
         while True:
             # Pick a random domain from the top 1M list
-            domain = get_random_domain()
+            try:
+                domain = get_random_domain()
+            except Exception as e:
+                logging.error(e)
+                logging.error("Please restart the script. The domains.sqlite file got removed!")
+                os.remove(database_path)
+                sys.exit(1)
 
             # Try to resolve the domain - that's why we're here in the first place, isn't it…
             try:
