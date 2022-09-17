@@ -63,3 +63,9 @@ ReadWriteDirectories=/home/pi/dnoise/
 [Install]
 WantedBy=multi-user.target
 ```
+
+Put this in your crontab file `crontab -e`:  
+```
+@weekly systemctl restart dnoise
+```  
+This will download the new Url data!
