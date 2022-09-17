@@ -1,21 +1,20 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
 
+from urllib.request import urlretrieve, urlopen
+from dns.resolver import Resolver
 from importlib import reload
 from json import load
-import logging
 import datetime
-import json
-import os
-import random
+import zipfile
+import logging
 import sqlite3
-import sys
+import random
+import json
 import time
-import urllib
-
-import dns.resolver
-import requests
-import pandas
+import os
+import sys
+import csv
 
 logging.basicConfig(level=logging.INFO)
 logging.getLogger().setLevel(logging.INFO)
@@ -45,7 +44,11 @@ multiplier = config["multiplier"]
 client = config["client"]
 
 # Set IP of your pi-hole instance. "127.0.0.1" is valid only when running directly on the pi-hole.
-dns.resolver.nameservers = config["pihole_ip"]
+pihole = Resolver(configure=False)
+nameservers = list()
+nameservers.append(config["pihole_ip"])
+pihole.nameservers = nameservers
+pihole.timeout = 5
 
 # Logging to a file.
 log_file = sys.stdout
@@ -54,18 +57,23 @@ log_file = sys.stdout
 working_directory = os.path.dirname(os.path.realpath(__file__))
 zip_path = os.path.join(working_directory, "domains.zip")
 database_path = os.path.join(working_directory, "domains.sqlite")
+csv_path = os.path.join(working_directory, "top-1m.csv")
 
 if auth == "":
     logging.warning("Please Set your auth token")
     sys.exit(1)
 
 
+def chunks(data, rows=10000):
+    for i in range(0, len(data), rows):
+        yield data[i:i+rows]
+
+
 def download_domains():
     # Download the Cisco Umbrella list. More info: https://s3-us-west-1.amazonaws.com/umbrella-static/index.html
     try:
         logging.info("Downloading the domain list…")
-        urllib.request.urlretrieve("https://s3-us-west-1.amazonaws.com/umbrella-static/top-1m.csv.zip",
-                                   filename=zip_path)
+        urlretrieve("https://s3-us-west-1.amazonaws.com/umbrella-static/top-1m.csv.zip", filename=zip_path)
     except Exception as e:
         logging.error(e)
         logging.error("Can't download the domain list. Quitting.")
@@ -74,15 +82,28 @@ def download_domains():
     # Create a SQLite database and import the domain list
     try:
         domains_db = sqlite3.connect(database_path)
-        domains_db.execute("CREATE TABLE domains (ID INT PRIMARY KEY, Domain TEXT)")
+        domains_db.execute("CREATE TABLE domains (url TEXT)")
 
-        # Load the CSV into our database
-        logging.info("Importing to sqlite…")
-        df = pandas.read_csv(zip_path, compression='zip', names=["ID", "Domain"])
-        df.to_sql("domains", domains_db, if_exists="append", index=False)
+        # unzip the file
+        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+            zip_ref.extractall(working_directory)
 
-        domains_db.close()
         os.remove(zip_path)
+        csv_file = open(csv_path, "r")
+        domain_data = csv.reader(csv_file)
+        chunk_data = chunks(list(domain_data))
+
+        cursor = domains_db.cursor()
+        for chunk in chunk_data:
+            cursor.execute('BEGIN TRANSACTION')
+            for ID, Domain in chunk:
+                cursor.execute('INSERT INTO domains (url) VALUES (?)', (Domain, ))
+            cursor.execute('COMMIT')
+
+        cursor.close()
+        domains_db.close()
+        csv_file.close()
+        os.remove(csv_path)
     except Exception as e:
         logging.error(e)
         logging.error("Import failed. Quitting.")
@@ -108,7 +129,7 @@ while True:
         logging.error(f"Network is not up after {network_try} connection checks to url {check_url}. exiting.")
         sys.exit(1)
     try:
-        urllib.request.urlopen(check_url)
+        urlopen(check_url)
         logging.info("Got network connection.")
         break
     except Exception as e:
@@ -124,6 +145,16 @@ if not exists:
 
 db = sqlite3.connect(database_path)
 
+
+def get_random_domain():
+    cursor = db.cursor()
+    # https://web.archive.org/web/20200628215538/http://www.bernzilla.com/2008/05/13/selecting-a-random-row-from-an-sqlite-table/
+    cursor.execute("SELECT url FROM Domains ORDER BY RANDOM() LIMIT 1;")
+    rnd_domain = cursor.fetchone()[0]
+    cursor.close()
+    return rnd_domain
+
+
 while True:
     # We want the fake queries to blend in with the organic traffic expected at each given time of the day,
     # so instead of having a static delay between individual queries, we'll sample the network activity over the past
@@ -138,7 +169,7 @@ while True:
             logging.error("Pihole seems to be down!")
             sys.exit(1)
         try:
-            all_queries = requests.get(f"http://{config['pihole_ip']}/admin/api.php?getAllQueries&from={str(time_from)}&until={str(time_until)}&auth={auth}")
+            all_queries = urlopen(f"http://{config['pihole_ip']}/admin/api.php?getAllQueries&from={str(time_from)}&until={str(time_until)}&auth={auth}").read()
             break
         except Exception as e:
             pihole_tries += 1
@@ -146,7 +177,7 @@ while True:
             logging.warning("API request failed. Retrying in 15 seconds.")
             time.sleep(15)
 
-    parsed_all_queries = json.loads(all_queries.text)
+    parsed_all_queries = json.loads(all_queries)
 
     # When determining the rate of DNS queries on the network, we don't want our past fake queries to skew the
     # statistics, therefore we filter out queries made by this machine.
@@ -182,15 +213,12 @@ while True:
     try:
         while True:
             # Pick a random domain from the top 1M list
-            cursor = db.cursor()
-            cursor.execute("SELECT domain FROM Domains WHERE ID = ?;", (str(random.randint(1, 1000000)), ))
-            domain = cursor.fetchone()[0]
-            cursor.close()
+            domain = get_random_domain()
 
             # Try to resolve the domain - that's why we're here in the first place, isn't it…
             try:
                 logging.info(f"resolving domain: {domain}")
-                dns.resolver.resolve(domain, random.choice(query_types))
+                pihole.resolve(domain, random.choice(query_types))
             except Exception as e:
                 logging.warning(e)
                 pass
