@@ -41,9 +41,6 @@ except Exception as e:
 # Set your pi-hole auth token - you can copy it from /etc/pihole/setupVars.conf
 auth = config["auth"]
 
-# Set the Fake Query Multiplier | Default: 1 = 10% Fake Query`s
-multiplier = config["multiplier"]
-
 # Set IP of the machine running this script. The script is optimized for running directly on the pi-hole server,
 # or on another un-attended machine. "127.0.0.1" is valid only when running directly on the pi-hole.
 client = config["client"]
@@ -166,12 +163,12 @@ def get_random_domain():
     return rnd_domain
 
 
-while True:
+def get_genuine_querys(seconds=300):
     # We want the fake queries to blend in with the organic traffic expected at each given time of the day,
     # so instead of having a static delay between individual queries, we'll sample the network activity over the past
     # 5 minutes and base the frequency on that. We want to add roughly 10% of additional activity in fake queries.
     time_until = int(time.mktime(datetime.datetime.now().timetuple()))
-    time_from = time_until - 300
+    time_from = time_until - seconds
 
     # This will give us a list of all DNS queries that pi-hole handled in the past 5 minutes.
     pihole_tries = 0
@@ -180,7 +177,8 @@ while True:
             logging.error("Pihole seems to be down!")
             sys.exit(1)
         try:
-            all_queries = urlopen(f"http://{config['pihole_ip']}/admin/api.php?getAllQueries&from={str(time_from)}&until={str(time_until)}&auth={auth}").read()
+            all_queries = urlopen(
+                f"http://{config['pihole_ip']}/admin/api.php?getAllQueries&from={str(time_from)}&until={str(time_until)}&auth={auth}&types=2,14,3,12,13").read()
             break
         except Exception as e:
             pihole_tries += 1
@@ -192,36 +190,53 @@ while True:
 
     # When determining the rate of DNS queries on the network, we don't want our past fake queries to skew the
     # statistics, therefore we filter out queries made by this machine.
-    genuine_queries = []
+    tmp_genuine_queries = []
     try:
         for a in parsed_all_queries["data"]:
             if a[3] != client.replace("127.0.0.1", "localhost"):
-                genuine_queries.append(a)
+                tmp_genuine_queries.append(a)
     except Exception as e:
         logging.error(e)
         logging.error("Pi-hole API response in wrong format. Investigate.")
         sys.exit(1)
 
     # Protection in case the pi-hole logs are empty.
-    if len(genuine_queries) == 0:
-        genuine_queries.append("Let's not divide by 0")
+    if len(tmp_genuine_queries) == 0:
+        tmp_genuine_queries.append("Let's not divide by 0")
 
     # We want the types of our fake queries (A/AAA/PTR/…) to proportionally match those of the real traffic.
-    query_types = []
+    tmp_query_types = []
     try:
         for a in parsed_all_queries["data"]:
             if a[3] != client.replace("127.0.0.1", "localhost"):
-                query_types.append(a[1])
+                tmp_query_types.append(a[1])
     except Exception as e:
         logging.error(e)
         logging.error("Pi-hole API response in wrong format. Investigate.")
         sys.exit(1)
 
     # Default to A request if pi-hole logs are empty
-    if len(query_types) == 0:
-        query_types.append("A")
+    if len(tmp_query_types) == 0:
+        tmp_query_types.append("A")
+
+    return tmp_query_types, tmp_genuine_queries
+
+
+while True:
+    seconds = 60
+    query_types, genuine_queries = get_genuine_querys(seconds)
 
     try:
+        # We got a time window of "seconds": first we calculate the total amount of query's that we need to send in
+        # that time window
+        query_amount = round(len(genuine_queries) / 100 * config["percentage_fake_data"])
+        if query_amount == 0:
+            query_amount = 1
+        # After that we need to calculate the timeout between each query to reach our target amount
+        timeout = seconds / query_amount
+        # Now we send our first query and wait for the timeout!
+
+        current_query_count = 0
         while True:
             # Pick a random domain from the top 1M list
             try:
@@ -240,13 +255,15 @@ while True:
                 logging.warning(e)
                 pass
 
-            # We want to re-sample our "queries per last 5 min" rate every minute.
-            if int(time.mktime(datetime.datetime.now().timetuple())) - time_until > 60:
+            # wait
+            current_query_count = current_query_count + 1
+            time.sleep(timeout)
+            # do the next request or exit the loop
+            if current_query_count == query_amount:
                 break
 
-            # Since we want to add only about 10% of extra DNS queries, we multiply the wait time by 10, then add a
-            # small random delay.
-            time.sleep((300.0 / (len(genuine_queries)) * 10 / multiplier) + random.uniform(0, 2))
+        logging.info(f"sent {query_amount} query's in {seconds} seconds when original were {len(genuine_queries)}")
+        # 5 minutes should have passed by now and we re-sample our "queries per last 5 min"
     except KeyboardInterrupt:
         try:
             break

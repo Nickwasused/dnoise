@@ -1,6 +1,6 @@
 {
   "auth": "",
-  "multiplier": 1,
+  "percentage_fake_data": 10,
   "client": "127.0.0.1",
   "pihole_ip": "127.0.0.1",
   "network_check_url": "https://duckduckgo.com",
