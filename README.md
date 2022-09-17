@@ -1,4 +1,3 @@
-# dnoise
 DNS noise generator that looks at your network activity and blends in. Requires [pi-hole](https://pi-hole.net) to run.
 
 ![dnoise blended into organic traffic](https://github.com/Nickwasused/dnoise/blob/master/traffic.png)
@@ -29,7 +28,8 @@ pip3 install -r requirements.txt
 
 1. Run this on the same machine that hosts your pi-hole instance.
 2. Rename the `config.example.json` to `config.json`
-3. Fill in the auth field of the config by getting the `WEBPASSWORD` from the Pi-hole config by typing `sudo cat /etc/pihole/setupVars.conf` on the Pi-hole server.
+3. Fill in the auth field of the config by getting the `WEBPASSWORD` from the Pi-hole config by typing `sudo cat /etc/pihole/setupVars.conf` on the Pi-hole server.  
+(https://github.com/Nickwasused/dnoise/wiki/Config-File)  
 4. That's all there is to it. The script will sample network activity every minute and add 10% extra DNS queries made randomly to Cisco's top 1M domain list.
 
 ## Automatic start
