@@ -31,7 +31,12 @@ def load_json(file):
     return load(f)
 
 
-config = load_json("config.json")
+try:
+    config = load_json("config.json")
+except Exception as e:
+    logging.error(e)
+    logging.error("your config file is broken!")
+    sys.exit(1)
 
 # Set your pi-hole auth token - you can copy it from /etc/pihole/setupVars.conf
 auth = config["auth"]
