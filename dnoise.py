@@ -255,15 +255,15 @@ while True:
                 logging.warning(e)
                 pass
 
-            # wait
             current_query_count = current_query_count + 1
+            # wait
             time.sleep(timeout)
             # do the next request or exit the loop
             if current_query_count == query_amount:
                 break
 
         logging.info(f"sent {query_amount} query's in {seconds} seconds when original were {len(genuine_queries)}")
-        # 5 minutes should have passed by now and we re-sample our "queries per last 5 min"
+        # Our defined time in seconds should have passed by now and we re-sample our "queries per last time window"
     except KeyboardInterrupt:
         try:
             break
