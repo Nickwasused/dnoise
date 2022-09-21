@@ -214,7 +214,7 @@ while True:
 
         querys = Urls().get_random_domains(query_amount)
         current_query_count = 0
-        
+
         while True:
             # select a random domains
             domain = querys[current_query_count]

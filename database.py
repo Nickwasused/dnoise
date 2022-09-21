@@ -1,3 +1,7 @@
+#!/usr/bin/python3
+# -*- coding: utf-8 -*-
+
+import logging
 import sqlite3
 import os
 
@@ -16,9 +20,11 @@ class Urls:
         self.cursor = self.db.cursor()
 
     def create_table(self):
+        logging.info("creating new database table")
         self.db.execute("CREATE TABLE domains (url TEXT)")
 
     def mass_insert_urls(self, urls):
+        logging.info(f"inserting {len(urls)} domains")
         chunk_data = chunks(list(urls))
         for chunk in chunk_data:
             self.cursor.execute('BEGIN TRANSACTION')
@@ -27,6 +33,7 @@ class Urls:
             self.cursor.execute('COMMIT')
 
     def get_random_domains(self, count=1):
+        logging.info(f"fetching {count} domains from db")
         # https://web.archive.org/web/20200628215538/http://www.bernzilla.com/2008/05/13/selecting-a-random-row-from-an-sqlite-table/
         self.cursor.execute("SELECT url FROM Domains ORDER BY RANDOM();")
         return_urls = []
