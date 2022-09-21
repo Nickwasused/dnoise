@@ -8,13 +8,14 @@ from json import load
 import datetime
 import zipfile
 import logging
-import sqlite3
 import random
 import json
 import time
 import os
 import sys
 import csv
+
+from database import Urls
 
 logging.basicConfig(level=logging.INFO)
 logging.getLogger().setLevel(logging.INFO)
@@ -58,17 +59,12 @@ log_file = sys.stdout
 # Set working directory for the script - the database with top 1M domains will be stored here.
 working_directory = os.path.dirname(os.path.realpath(__file__))
 zip_path = os.path.join(working_directory, "domains.zip")
-database_path = os.path.join(working_directory, "domains.sqlite")
 csv_path = os.path.join(working_directory, "top-1m.csv")
+database_path = os.path.join(working_directory, "domains.sqlite")
 
 if auth == "":
     logging.warning("Please Set your auth token")
     sys.exit(1)
-
-
-def chunks(data, rows=10000):
-    for i in range(0, len(data), rows):
-        yield data[i:i+rows]
 
 
 def download_domains():
@@ -83,8 +79,7 @@ def download_domains():
 
     # Create a SQLite database and import the domain list
     try:
-        domains_db = sqlite3.connect(database_path)
-        domains_db.execute("CREATE TABLE domains (url TEXT)")
+        Urls().create_table()
 
         # unzip the file
         with zipfile.ZipFile(zip_path, 'r') as zip_ref:
@@ -93,17 +88,9 @@ def download_domains():
         os.remove(zip_path)
         csv_file = open(csv_path, "r")
         domain_data = csv.reader(csv_file)
-        chunk_data = chunks(list(domain_data))
 
-        cursor = domains_db.cursor()
-        for chunk in chunk_data:
-            cursor.execute('BEGIN TRANSACTION')
-            for ID, Domain in chunk:
-                cursor.execute('INSERT INTO domains (url) VALUES (?)', (Domain, ))
-            cursor.execute('COMMIT')
+        Urls().mass_insert_urls(domain_data)
 
-        cursor.close()
-        domains_db.close()
         csv_file.close()
         os.remove(csv_path)
     except Exception as e:
@@ -150,17 +137,6 @@ if (time.time() - os.path.getctime(database_path)) > 604400 and config["keep_dat
     logging.warning("the domain data is old. downloading new data")
     os.remove(database_path)
     download_domains()
-
-db = sqlite3.connect(database_path)
-
-
-def get_random_domain():
-    cursor = db.cursor()
-    # https://web.archive.org/web/20200628215538/http://www.bernzilla.com/2008/05/13/selecting-a-random-row-from-an-sqlite-table/
-    cursor.execute("SELECT url FROM Domains ORDER BY RANDOM() LIMIT 1;")
-    rnd_domain = cursor.fetchone()[0]
-    cursor.close()
-    return rnd_domain
 
 
 def get_genuine_querys(seconds=300):
@@ -236,16 +212,12 @@ while True:
         timeout = seconds / query_amount
         # Now we send our first query and wait for the timeout!
 
+        querys = Urls().get_random_domains(query_amount)
         current_query_count = 0
+        
         while True:
-            # Pick a random domain from the top 1M list
-            try:
-                domain = get_random_domain()
-            except Exception as e:
-                logging.error(e)
-                logging.error("Please restart the script. The domains.sqlite file got removed!")
-                os.remove(database_path)
-                sys.exit(1)
+            # select a random domains
+            domain = querys[current_query_count]
 
             # Try to resolve the domain - that's why we're here in the first place, isn't it…
             try:
@@ -271,4 +243,3 @@ while True:
             break
 
 logging.info("exiting")
-db.close()

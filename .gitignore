@@ -8,3 +8,4 @@
 .idea/DNoiSe.iml
 config.json
 domains.sqlite
+__pycache__
