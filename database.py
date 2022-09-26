@@ -24,7 +24,6 @@ class Urls:
         self.db.execute("CREATE TABLE domains (url TEXT)")
 
     def mass_insert_urls(self, urls):
-        logging.info(f"inserting {len(urls)} domains")
         chunk_data = chunks(list(urls))
         for chunk in chunk_data:
             self.cursor.execute('BEGIN TRANSACTION')
