@@ -4,7 +4,7 @@
 from urllib.request import urlretrieve, urlopen
 from dns.resolver import Resolver
 from importlib import reload
-from json import load
+import configparser
 import datetime
 import zipfile
 import logging
@@ -22,34 +22,30 @@ logging.getLogger().setLevel(logging.INFO)
 
 reload(sys)
 
-
-def load_json(file):
-    try:
-        f = open(file, encoding="utf8")
-    except FileNotFoundError:
-        logging.warning("The config file is missing: config.json")
-        sys.exit(1)
-    return load(f)
-
-
+config_reader = configparser.ConfigParser()
 try:
-    config = load_json("config.json")
-except Exception as e:
-    logging.error(e)
-    logging.error("your config file is broken!")
+    config_reader.read('config.ini')
+except configparser.ParsingError:
+    logging.error("config file broken")
     sys.exit(1)
 
+config = config_reader['DEFAULT']
+
 # Set your pi-hole auth token - you can copy it from /etc/pihole/setupVars.conf
-auth = config["auth"]
+auth = config.get("auth", "")
+
+if auth == "":
+    logging.error("please set your auth token in the config.ini!")
+    sys.exit(1)
 
 # Set IP of the machine running this script. The script is optimized for running directly on the pi-hole server,
 # or on another un-attended machine. "127.0.0.1" is valid only when running directly on the pi-hole.
-client = config["client"]
+client = config.get("client", "127.0.0.1")
 
 # Set IP of your pi-hole instance. "127.0.0.1" is valid only when running directly on the pi-hole.
 pihole = Resolver(configure=False)
 nameservers = list()
-nameservers.append(config["pihole_ip"])
+nameservers.append(config.get("pihole_ip", "127.0.0.1"))
 pihole.nameservers = nameservers
 pihole.timeout = 5
 
@@ -61,10 +57,6 @@ working_directory = os.path.dirname(os.path.realpath(__file__))
 zip_path = os.path.join(working_directory, "domains.zip")
 csv_path = os.path.join(working_directory, "top-1m.csv")
 database_path = os.path.join(working_directory, "domains.sqlite")
-
-if auth == "":
-    logging.warning("Please Set your auth token")
-    sys.exit(1)
 
 
 def download_domains():
@@ -105,8 +97,8 @@ def download_domains():
 # A simple loop that makes sure we have an Internet connection - it can take a while for pi-hole to get up and
 # running after a reboot.
 network_try = 0
-retry_seconds = config["network_retry_time"]
-check_url = config["network_check_url"]
+retry_seconds = config.getint("network_retry_time", 10)
+check_url = config.get("network_check_url", "https://duckduckgo.com")
 
 if "http" not in check_url:
     logging.warning("There is no protocol specified in your network_check_url. Using https!")
@@ -114,7 +106,7 @@ if "http" not in check_url:
     logging.info(f"New network_check_url: {check_url}")
 
 while True:
-    if network_try > config["maximum_network_tries"]:
+    if network_try > config.getint("maximum_network_tries", 10):
         logging.error(f"Network is not up after {network_try} connection checks to url {check_url}. exiting.")
         sys.exit(1)
     try:
@@ -133,18 +125,18 @@ if not exists:
     download_domains()
 
 # 7 days = 604400
-if (time.time() - os.path.getctime(database_path)) > 604400 and config["keep_database_updated"]:
+if (time.time() - os.path.getctime(database_path)) > 604400 and config.getboolean("keep_database_updated", True):
     logging.warning("the domain data is old. downloading new data")
     os.remove(database_path)
     download_domains()
 
 
-def get_genuine_querys(seconds=300):
+def get_genuine_querys(seconds_backwards=300):
     # We want the fake queries to blend in with the organic traffic expected at each given time of the day,
     # so instead of having a static delay between individual queries, we'll sample the network activity over the past
     # 5 minutes and base the frequency on that. We want to add roughly 10% of additional activity in fake queries.
     time_until = int(time.mktime(datetime.datetime.now().timetuple()))
-    time_from = time_until - seconds
+    time_from = time_until - seconds_backwards
 
     # This will give us a list of all DNS queries that pi-hole handled in the past 5 minutes.
     pihole_tries = 0
@@ -154,7 +146,7 @@ def get_genuine_querys(seconds=300):
             sys.exit(1)
         try:
             all_queries = urlopen(
-                f"http://{config['pihole_ip']}/admin/api.php?getAllQueries&from={str(time_from)}&until={str(time_until)}&auth={auth}&types=2,14,3,12,13").read()
+                f"http://{config.get('pihole_ip')}/admin/api.php?getAllQueries&from={str(time_from)}&until={str(time_until)}&auth={auth}&types=2,14,3,12,13").read()
             break
         except Exception as e:
             pihole_tries += 1
@@ -205,7 +197,7 @@ while True:
     try:
         # We got a time window of "seconds": first we calculate the total amount of query's that we need to send in
         # that time window
-        query_amount = round(len(genuine_queries) / 100 * config["percentage_fake_data"])
+        query_amount = round(len(genuine_queries) / 100 * config.getint("percentage_fake_data", 10))
         if query_amount == 0:
             query_amount = 1
         # After that we need to calculate the timeout between each query to reach our target amount
