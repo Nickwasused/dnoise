@@ -1,11 +1,5 @@
 
-.idea/vcs.xml
-.idea/runConfigurations/_template__of_Python.xml
-.idea/modules.xml
-.idea/misc.xml
-.idea/inspectionProfiles/Project_Default.xml
-.idea/inspectionProfiles/profiles_settings.xml
-.idea/DNoiSe.iml
-config.json
+.idea/
+config.ini
 domains.sqlite
 __pycache__
