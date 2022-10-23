@@ -4,6 +4,7 @@
 from urllib.request import urlretrieve, urlopen
 from dns.resolver import Resolver
 from importlib import reload
+from pathlib import Path
 import configparser
 import datetime
 import zipfile
@@ -22,9 +23,10 @@ logging.getLogger().setLevel(logging.INFO)
 
 reload(sys)
 
+config_path = Path(__file__).parent.absolute().joinpath('config.ini')
 config_reader = configparser.ConfigParser()
 try:
-    config_reader.read('config.ini')
+    config_reader.read(config_path)
 except configparser.ParsingError:
     logging.error("config file broken")
     sys.exit(1)
