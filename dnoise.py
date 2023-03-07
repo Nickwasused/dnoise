@@ -212,13 +212,14 @@ while True:
         while True:
             # select a random domain
             domain = queries[current_query_count]
+            query_type = random.choice(query_types)
 
             # Try to resolve the domain - that's why we're here in the first place, isn't it…
             try:
-                logging.info(f"resolving domain: {domain}")
+                logging.info(f"resolving domain: {domain} with type {query_type}")
                 # resolve the query with a random query type that we got from the genuine queries
                 # e.g. resolve duckduckgo.com with the type AAAA or PTR
-                pihole.resolve(domain, random.choice(query_types))
+                pihole.resolve(domain, query_type)
             except Exception as e:
                 logging.warning(e)
                 pass
