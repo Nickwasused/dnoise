@@ -42,7 +42,7 @@ if auth == "":
 
 # Set IP of the machine running this script. The script is optimized for running directly on the pi-hole server,
 # or on another un-attended machine. "127.0.0.1" is valid only when running directly on the pi-hole.
-client = config.get("client", "127.0.0.1")
+client = config.get("client", "127.0.0.1").replace("127.0.0.1", "localhost")
 
 # Set IP of your pi-hole instance. "127.0.0.1" is valid only when running directly on the pi-hole.
 pihole = Resolver(configure=False)
@@ -133,22 +133,22 @@ if (time.time() - os.path.getctime(database_path)) > 604400 and config.getboolea
     download_domains()
 
 
-def get_genuine_querys(seconds_backwards=300):
+def get_genuine_queries(seconds_backwards=300):
     # We want the fake queries to blend in with the organic traffic expected at each given time of the day,
     # so instead of having a static delay between individual queries, we'll sample the network activity over the past
-    # 5 minutes and base the frequency on that. We want to add roughly 10% of additional activity in fake queries.
+    # 5 minutes (or a defined time range in seconds) and base the frequency on that. We want to add roughly 10% of
+    # additional activity in fake queries.
     time_until = int(time.mktime(datetime.datetime.now().timetuple()))
     time_from = time_until - seconds_backwards
 
-    # This will give us a list of all DNS queries that pi-hole handled in the past 5 minutes.
+    # This will give us a list of all DNS queries that pi-hole handled in the defined time range.
     pihole_tries = 0
     while True:
         if pihole_tries > 15:
             logging.error("Pihole seems to be down!")
             sys.exit(1)
         try:
-            all_queries = urlopen(
-                f"http://{config.get('pihole_ip')}/admin/api.php?getAllQueries&from={str(time_from)}&until={str(time_until)}&auth={auth}&types=2,14,3,12,13").read()
+            all_queries = urlopen(f"http://{config.get('pihole_ip')}/admin/api.php?getAllQueries&from={str(time_from)}&until={str(time_until)}&auth={auth}&types=2,14,3,12,13").read()
             break
         except Exception as e:
             pihole_tries += 1
@@ -158,13 +158,12 @@ def get_genuine_querys(seconds_backwards=300):
 
     parsed_all_queries = json.loads(all_queries)
 
-    # When determining the rate of DNS queries on the network, we don't want our past fake queries to skew the
-    # statistics, therefore we filter out queries made by this machine.
+    # filter out the queries made our IP e.g. 127.0.0.1 if running on pihole
     tmp_genuine_queries = []
     try:
-        for a in parsed_all_queries["data"]:
-            if a[3] != client.replace("127.0.0.1", "localhost"):
-                tmp_genuine_queries.append(a)
+        for query in parsed_all_queries["data"]:
+            if query[3] != client:
+                tmp_genuine_queries.append(query)
     except Exception as e:
         logging.error(e)
         logging.error("Pi-hole API response in wrong format. Investigate.")
@@ -177,15 +176,16 @@ def get_genuine_querys(seconds_backwards=300):
     # We want the types of our fake queries (A/AAA/PTR/…) to proportionally match those of the real traffic.
     tmp_query_types = []
     try:
-        for a in parsed_all_queries["data"]:
-            if a[3] != client.replace("127.0.0.1", "localhost"):
-                tmp_query_types.append(a[1])
+        for query in tmp_genuine_queries:
+            # query[3] is the origin device e.g. phone.lan
+            # query[1] is the query Type e.g. AAAA
+            tmp_query_types.append(query[1])
     except Exception as e:
         logging.error(e)
         logging.error("Pi-hole API response in wrong format. Investigate.")
         sys.exit(1)
 
-    # Default to A request if pi-hole logs are empty
+    # insert the type A if there are no types
     if len(tmp_query_types) == 0:
         tmp_query_types.append("A")
 
@@ -194,7 +194,7 @@ def get_genuine_querys(seconds_backwards=300):
 
 while True:
     seconds = 60
-    query_types, genuine_queries = get_genuine_querys(seconds)
+    query_types, genuine_queries = get_genuine_queries(seconds)
 
     try:
         # We got a time window of "seconds": first we calculate the total amount of query's that we need to send in
@@ -206,16 +206,18 @@ while True:
         timeout = seconds / query_amount
         # Now we send our first query and wait for the timeout!
 
-        querys = Urls().get_random_domains(query_amount)
+        queries = Urls().get_random_domains(query_amount)
         current_query_count = 0
 
         while True:
-            # select a random domains
-            domain = querys[current_query_count]
+            # select a random domain
+            domain = queries[current_query_count]
 
             # Try to resolve the domain - that's why we're here in the first place, isn't it…
             try:
                 logging.info(f"resolving domain: {domain}")
+                # resolve the query with a random query type that we got from the genuine queries
+                # e.g. resolve duckduckgo.com with the type AAAA or PTR
                 pihole.resolve(domain, random.choice(query_types))
             except Exception as e:
                 logging.warning(e)
