@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 from dns.exception import DNSException
+from time import sleep, mktime, time
 from dns.resolver import Resolver
 from importlib import reload
 from pathlib import Path
+from csv import reader
 import urllib.request
 import urllib.error
 import configparser
@@ -11,10 +13,8 @@ import zipfile
 import logging
 import random
 import json
-import time
 import os
 import sys
-import csv
 
 from database import Urls
 
@@ -59,22 +59,18 @@ def download_domains() -> None:
 
     Urls().create_table()
 
-    # Create a SQLite database and import the domain list
     try:
-        # unzip the file
         with zipfile.ZipFile(zip_path, 'r') as zip_ref:
             zip_ref.extractall(working_directory)
 
         os.remove(zip_path)
-        csv_file = open(csv_path, "r")
-        domain_data = csv.reader(csv_file)
+        with open(csv_path, "r") as csv_file:
+            domain_data = list(reader(csv_file))
+            Urls().mass_insert_urls(domain_data)
 
-        Urls().mass_insert_urls(domain_data)
-
-        csv_file.close()
         os.remove(csv_path)
-    except Exception as e:
-        logging.error(e)
+    except Exception as import_error:
+        logging.error(import_error)
         logging.error("Import failed. Quitting.")
         sys.exit(1)
 
@@ -105,7 +101,7 @@ def check_network() -> None:
             logging.error(dns_error)
             logging.info(f"Network not up yet, retrying in {retry_seconds} seconds.")
             network_try += 1
-            time.sleep(retry_seconds)
+            sleep(retry_seconds)
 
 
 def get_genuine_queries(seconds_backwards: int = 300) -> [list[str], list[str]]:
@@ -122,7 +118,7 @@ def get_genuine_queries(seconds_backwards: int = 300) -> [list[str], list[str]]:
     If there are no query types then it will default to an A record.
     """
 
-    time_until = int(time.mktime(datetime.datetime.now().timetuple()))
+    time_until = int(mktime(datetime.datetime.now().timetuple()))
     time_from = time_until - seconds_backwards
 
     pihole_tries = 0
@@ -139,7 +135,7 @@ def get_genuine_queries(seconds_backwards: int = 300) -> [list[str], list[str]]:
             pihole_tries += 1
             logging.error(pihole_error)
             logging.warning("API request failed. Retrying in 15 seconds.")
-            time.sleep(15)
+            sleep(15)
 
     parsed_all_queries = json.loads(all_queries)
     tmp_genuine_queries = []
@@ -194,7 +190,7 @@ if __name__ == "__main__":
         download_domains()
 
     # 7 days = 604400
-    if (time.time() - os.path.getctime(database_path)) > 604400 and config.getboolean("keep_database_updated", True):
+    if (time() - os.path.getctime(database_path)) > 604400 and config.getboolean("keep_database_updated", True):
         logging.warning("the domain data is old. downloading new data")
         os.remove(database_path)
         download_domains()
@@ -233,7 +229,7 @@ if __name__ == "__main__":
 
                 current_query_count = current_query_count + 1
                 # wait
-                time.sleep(timeout)
+                sleep(timeout)
                 # do the next request or exit the loop
                 if current_query_count == query_amount:
                     break
