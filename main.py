@@ -1,20 +1,21 @@
 #!/usr/bin/env python3
-from dns.exception import DNSException
-from time import sleep, mktime, time
-from dns.resolver import Resolver
-from importlib import reload
-from pathlib import Path
-from csv import reader
-import urllib.request
-import urllib.error
 import configparser
 import datetime
-import zipfile
-import logging
-import random
 import json
+import logging
 import os
 import sys
+import urllib.error
+import urllib.request
+from csv import reader
+from random import choice
+from zipfile import ZipFile
+from importlib import reload
+from pathlib import Path
+from time import sleep, mktime, time
+
+from dns.exception import DNSException
+from dns.resolver import Resolver
 
 from database import Urls
 
@@ -60,7 +61,7 @@ def download_domains() -> None:
     Urls().create_table()
 
     try:
-        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+        with ZipFile(zip_path, 'r') as zip_ref:
             zip_ref.extractall(working_directory)
 
         os.remove(zip_path)
@@ -216,7 +217,7 @@ if __name__ == "__main__":
             while True:
                 # select a random domain
                 domain = queries[current_query_count]
-                query_type = random.choice(query_types)
+                query_type = choice(query_types)
 
                 # Try to resolve the domain - that's why we're here in the first place, isn't it…
                 try:
