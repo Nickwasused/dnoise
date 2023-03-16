@@ -91,7 +91,8 @@ def check_network() -> None:
 
     while True:
         if network_try > config.getint("maximum_network_tries", 10):
-            logging.error(f"Network is not up after {network_try} connection checks to url {network_check_url}. exiting.")
+            logging.error(f"Network is not up after {network_try} "
+                          f"connection checks to url {network_check_url}. exiting.")
             sys.exit(1)
         try:
             _answer = check_resolver.resolve(network_check_url)
@@ -107,13 +108,13 @@ def check_network() -> None:
 def get_genuine_queries(seconds_backwards: int = 300) -> [list[str], list[str]]:
     """We want the fake queries to blend in with the organic traffic expected at each given time of the day,
     so instead of having a static delay between individual queries, we'll sample the network activity over the past
-    5 minutes (or a defined time range in seconds) and base the frequency on that. We want to add roughly 10% (or the defined threshold) of
-    additional activity in fake queries.
+    5 minutes (or a defined time range in seconds) and base the frequency on that. We want to add roughly 10%
+    (or the defined threshold) of additional activity in fake queries.
 
     All queries by our ip are filtered, because otherwise we would increase the fake domains on every pass.
 
     The queries look like this:
-        ['1678988772', 'A', 'bluelock.fandom.com', 'localhost', '2', '0', '3', '1034', 'N/A', '-1', '1.1.1.1', '']
+        ['1678988772', 'A', 'google.com', 'localhost', '2', '0', '3', '1034', 'N/A', '-1', '1.1.1.1', '']
 
     If there are no query types then it will default to an A record.
     """
